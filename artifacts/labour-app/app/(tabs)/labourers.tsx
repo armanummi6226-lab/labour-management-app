@@ -1,9 +1,12 @@
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import {
+  Alert,
   FlatList,
+  Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,113 +16,92 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
-import { Labour, useApp } from "@/context/AppContext";
+import { Site, SITE_COLORS, useApp } from "@/context/AppContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 
-export default function LaboureursScreen() {
+export default function SitesScreen() {
   const colors = useColors();
   const { t } = useLanguage();
-  const { labourers, calcStats } = useApp();
+  const { sites, addSite, deleteSite, calcSiteStats } = useApp();
   const insets = useSafeAreaInsets();
 
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "active" | "left">("all");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [siteName, setSiteName] = useState("");
+  const [selectedColor, setSelectedColor] = useState(SITE_COLORS[1]);
 
-  const filtered = useMemo(() => {
-    let list = labourers;
-    if (filter !== "all") list = list.filter((l) => l.status === filter);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((l) =>
-        l.name.toLowerCase().includes(q) || l.phone?.includes(q) || l.workType?.toLowerCase().includes(q)
-      );
+  const handleAddSite = () => {
+    if (!siteName.trim()) {
+      Alert.alert("", "Site name is required");
+      return;
     }
-    return [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [labourers, search, filter]);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    addSite(siteName.trim(), selectedColor);
+    setSiteName("");
+    setSelectedColor(SITE_COLORS[1]);
+    setShowAddModal(false);
+  };
+
+  const handleDeleteSite = (site: Site) => {
+    Alert.alert(t("deleteSite"), t("deleteSiteConfirm"), [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("confirm"),
+        style: "destructive",
+        onPress: () => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          deleteSite(site.id);
+        },
+      },
+    ]);
+  };
 
   const styles = makeStyles(colors, insets);
 
-  const renderItem = ({ item }: { item: Labour }) => {
-    const s = calcStats(item);
+  const renderSite = ({ item }: { item: Site }) => {
+    const ss = calcSiteStats(item.id);
+    const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`;
     return (
       <TouchableOpacity
-        style={styles.card}
+        style={styles.siteCard}
         onPress={() => {
           Haptics.selectionAsync();
-          router.push(`/labour/${item.id}` as any);
+          router.push(`/site/${item.id}` as any);
         }}
+        onLongPress={() => handleDeleteSite(item)}
         activeOpacity={0.75}
       >
-        <View style={styles.cardTop}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
-          </View>
-          <View style={styles.cardInfo}>
-            <Text style={styles.name}>{item.name}</Text>
-            <Text style={styles.meta}>
-              {item.workType || "-"} • ₹{item.ratePerDay}/day
-            </Text>
-            {item.phone ? (
-              <Text style={styles.phone}>{item.phone}</Text>
-            ) : null}
-          </View>
-          <View style={styles.cardRight}>
-            {item.status === "left" ? (
-              <View style={[styles.chip, { backgroundColor: colors.muted }]}>
-                <Text style={[styles.chipText, { color: colors.mutedForeground }]}>{t("leftWork")}</Text>
-              </View>
-            ) : (
-              <View style={[styles.chip, { backgroundColor: colors.accent }]}>
-                <Text style={[styles.chipText, { color: colors.primary }]}>{t("active")}</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Stats Row */}
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{s.daysWorked}</Text>
-            <Text style={styles.statLabel}>{t("daysWorked")}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>₹{s.totalEarned.toLocaleString("en-IN")}</Text>
-            <Text style={styles.statLabel}>{t("totalEarned")}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: colors.warning }]}>
-              ₹{s.totalAdvance.toLocaleString("en-IN")}
-            </Text>
-            <Text style={styles.statLabel}>{t("totalAdvanceTaken")}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: s.remainingBalance >= 0 ? colors.success : colors.destructive }]}>
-              ₹{Math.abs(s.remainingBalance).toLocaleString("en-IN")}
-            </Text>
-            <Text style={[styles.statLabel, { color: s.remainingBalance >= 0 ? colors.success : colors.destructive }]}>
-              {t("remainingBalance")}
-            </Text>
-          </View>
-        </View>
-
-        {/* Alert badges */}
-        {(s.isLeftWithAdvance || s.isAdvancePending) && (
-          <View style={styles.alertRow}>
-            {s.isLeftWithAdvance && (
+        <View style={[styles.siteColorBar, { backgroundColor: item.color }]} />
+        <View style={styles.siteContent}>
+          <View style={styles.siteTopRow}>
+            <View style={[styles.siteDot, { backgroundColor: item.color }]} />
+            <Text style={styles.siteName}>{item.name}</Text>
+            {ss.alertCount > 0 && (
               <View style={[styles.alertBadge, { backgroundColor: colors.destructive }]}>
-                <Ionicons name="warning" size={12} color="#fff" />
-                <Text style={styles.alertText}>{t("leftWithAdvance")}</Text>
+                <Ionicons name="warning" size={10} color="#fff" />
+                <Text style={styles.alertBadgeText}>{ss.alertCount}</Text>
               </View>
             )}
-            {!s.isLeftWithAdvance && s.isAdvancePending && (
-              <View style={[styles.alertBadge, { backgroundColor: colors.warning }]}>
-                <MaterialCommunityIcons name="alert-circle" size={12} color="#fff" />
-                <Text style={styles.alertText}>{t("advancePendingBadge")}</Text>
-              </View>
-            )}
+            <TouchableOpacity
+              style={styles.arrowBtn}
+              onPress={() => router.push(`/site/${item.id}` as any)}
+            >
+              <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+            </TouchableOpacity>
           </View>
-        )}
+
+          <View style={styles.siteStats}>
+            <StatPill label={t("totalLabourers")} value={ss.activeCount.toString()} color={colors.info} colors={colors} />
+            <StatPill label={t("siteLabourCost")} value={fmt(ss.labourCost)} color={colors.success} colors={colors} />
+            <StatPill label={t("siteTotalAdvance")} value={fmt(ss.totalAdvance)} color={colors.warning} colors={colors} />
+            <StatPill label={t("siteOtherExpense")} value={fmt(ss.otherExpenses)} color={colors.mutedForeground} colors={colors} />
+          </View>
+
+          <View style={styles.siteNetRow}>
+            <Text style={styles.siteNetLabel}>{t("siteNetCost")}</Text>
+            <Text style={[styles.siteNetValue, { color: colors.foreground }]}>{fmt(ss.netCost)}</Text>
+          </View>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -127,59 +109,96 @@ export default function LaboureursScreen() {
   return (
     <View style={styles.root}>
       {/* Header */}
-      <View style={styles.headerBar}>
-        <Text style={styles.screenTitle}>{t("labourers")}</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>{t("sites")}</Text>
         <TouchableOpacity
           style={styles.addBtn}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            router.push("/labour/add");
+            setShowAddModal(true);
           }}
         >
           <Ionicons name="add" size={24} color={colors.primaryForeground} />
         </TouchableOpacity>
       </View>
 
-      {/* Search */}
-      <View style={styles.searchRow}>
-        <Ionicons name="search" size={18} color={colors.mutedForeground} style={styles.searchIcon} />
-        <TextInput
-          style={styles.search}
-          placeholder={`${t("name")}, ${t("workType")}...`}
-          placeholderTextColor={colors.mutedForeground}
-          value={search}
-          onChangeText={setSearch}
-        />
-      </View>
-
-      {/* Filter Tabs */}
-      <View style={styles.filters}>
-        {(["all", "active", "left"] as const).map((f) => (
-          <TouchableOpacity
-            key={f}
-            style={[styles.filterBtn, filter === f && styles.filterBtnActive]}
-            onPress={() => setFilter(f)}
-          >
-            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
-              {f === "all" ? (t("labourers")) : f === "active" ? t("active") : t("leftWork")}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
       <FlatList
-        data={filtered}
+        data={sites}
         keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
-        scrollEnabled={!!filtered.length}
+        renderItem={renderSite}
+        contentContainerStyle={styles.list}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="people-outline" size={48} color={colors.mutedForeground} />
-            <Text style={styles.emptyText}>{t("noLabourers")}</Text>
+            <MaterialCommunityIcons name="office-building-outline" size={52} color={colors.mutedForeground} />
+            <Text style={styles.emptyTitle}>{t("noSites")}</Text>
+            <Text style={styles.emptySubtitle}>{t("startAddingSite")}</Text>
+            <TouchableOpacity
+              style={styles.emptyBtn}
+              onPress={() => setShowAddModal(true)}
+            >
+              <Ionicons name="add-circle" size={18} color={colors.primaryForeground} />
+              <Text style={styles.emptyBtnText}>{t("addSite")}</Text>
+            </TouchableOpacity>
           </View>
         }
       />
+
+      {/* Add Site Modal */}
+      <Modal visible={showAddModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modal}>
+            <Text style={styles.modalTitle}>{t("addSite")}</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder={t("siteNamePlaceholder")}
+              placeholderTextColor={colors.mutedForeground}
+              value={siteName}
+              onChangeText={setSiteName}
+              autoFocus
+            />
+
+            <Text style={[styles.colorLabel, { color: colors.mutedForeground }]}>{t("siteColor")}</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
+              <View style={styles.colorRow}>
+                {SITE_COLORS.map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    style={[styles.colorDot, { backgroundColor: c }, selectedColor === c && styles.colorDotSelected]}
+                    onPress={() => setSelectedColor(c)}
+                  >
+                    {selectedColor === c && <Ionicons name="checkmark" size={14} color="#fff" />}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalBtns}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => { setShowAddModal(false); setSiteName(""); }}
+              >
+                <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>{t("cancel")}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmBtn} onPress={handleAddSite}>
+                <Text style={styles.confirmText}>{t("save")}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+function StatPill({ label, value, color, colors }: {
+  label: string; value: string; color: string;
+  colors: ReturnType<typeof import("@/hooks/useColors").useColors>;
+}) {
+  return (
+    <View style={{ alignItems: "center", flex: 1 }}>
+      <Text style={{ fontSize: 12, fontWeight: "700", color, fontFamily: "Inter_700Bold" }} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+      <Text style={{ fontSize: 9, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center" }}>{label}</Text>
     </View>
   );
 }
@@ -187,150 +206,51 @@ export default function LaboureursScreen() {
 const makeStyles = (colors: ReturnType<typeof import("@/hooks/useColors").useColors>, insets: { top: number; bottom: number }) =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.background },
-    headerBar: {
+    header: {
       paddingTop: insets.top + (Platform.OS === "web" ? 67 : 12),
-      paddingHorizontal: 16,
-      paddingBottom: 12,
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      backgroundColor: colors.background,
+      paddingHorizontal: 16, paddingBottom: 12,
+      flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     },
-    screenTitle: {
-      fontSize: 24,
-      fontWeight: "800",
-      color: colors.foreground,
-      fontFamily: "Inter_700Bold",
+    title: { fontSize: 24, fontWeight: "800", color: colors.foreground, fontFamily: "Inter_700Bold" },
+    addBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+    list: { paddingHorizontal: 16, paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 90) },
+    siteCard: {
+      backgroundColor: colors.card, borderRadius: colors.radius,
+      marginBottom: 12, overflow: "hidden", flexDirection: "row",
+      elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6,
     },
-    addBtn: {
-      width: 42,
-      height: 42,
-      borderRadius: 21,
-      backgroundColor: colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
+    siteColorBar: { width: 5 },
+    siteContent: { flex: 1, padding: 14 },
+    siteTopRow: { flexDirection: "row", alignItems: "center", marginBottom: 12, gap: 8 },
+    siteDot: { width: 10, height: 10, borderRadius: 5 },
+    siteName: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" },
+    alertBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10 },
+    alertBadgeText: { fontSize: 10, color: "#fff", fontWeight: "700", fontFamily: "Inter_700Bold" },
+    arrowBtn: { padding: 4 },
+    siteStats: { flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, marginBottom: 10, gap: 4 },
+    siteNetRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    siteNetLabel: { fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_500Medium" },
+    siteNetValue: { fontSize: 16, fontWeight: "800", fontFamily: "Inter_700Bold" },
+    empty: { alignItems: "center", paddingTop: 80, gap: 12 },
+    emptyTitle: { fontSize: 18, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold" },
+    emptySubtitle: { fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center" },
+    emptyBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.primary, borderRadius: colors.radius, paddingHorizontal: 20, paddingVertical: 12, marginTop: 8 },
+    emptyBtnText: { color: colors.primaryForeground, fontSize: 15, fontWeight: "700", fontFamily: "Inter_700Bold" },
+    modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+    modal: { backgroundColor: colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
+    modalTitle: { fontSize: 18, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold", marginBottom: 16 },
+    input: {
+      backgroundColor: colors.background, borderWidth: 1.5, borderColor: colors.border,
+      borderRadius: colors.radius, padding: 14, fontSize: 16,
+      color: colors.foreground, fontFamily: "Inter_500Medium", marginBottom: 16,
     },
-    searchRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginHorizontal: 16,
-      backgroundColor: colors.card,
-      borderRadius: colors.radius,
-      borderWidth: 1,
-      borderColor: colors.border,
-      paddingHorizontal: 12,
-      marginBottom: 12,
-    },
-    searchIcon: { marginRight: 8 },
-    search: {
-      flex: 1,
-      paddingVertical: 12,
-      fontSize: 15,
-      color: colors.foreground,
-      fontFamily: "Inter_400Regular",
-    },
-    filters: {
-      flexDirection: "row",
-      marginHorizontal: 16,
-      marginBottom: 12,
-      gap: 8,
-    },
-    filterBtn: {
-      paddingHorizontal: 16,
-      paddingVertical: 7,
-      borderRadius: 20,
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    filterBtnActive: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
-    },
-    filterText: {
-      fontSize: 13,
-      color: colors.mutedForeground,
-      fontFamily: "Inter_500Medium",
-    },
-    filterTextActive: {
-      color: colors.primaryForeground,
-    },
-    listContent: {
-      paddingHorizontal: 16,
-      paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 90),
-    },
-    card: {
-      backgroundColor: colors.card,
-      borderRadius: colors.radius,
-      padding: 14,
-      marginBottom: 10,
-      elevation: 2,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.07,
-      shadowRadius: 4,
-    },
-    cardTop: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-    avatar: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
-      backgroundColor: colors.accent,
-      alignItems: "center",
-      justifyContent: "center",
-      marginRight: 12,
-    },
-    avatarText: {
-      fontSize: 20,
-      fontWeight: "700",
-      color: colors.primary,
-      fontFamily: "Inter_700Bold",
-    },
-    cardInfo: { flex: 1 },
-    name: { fontSize: 16, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" },
-    meta: { fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 },
-    phone: { fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-    cardRight: { alignItems: "flex-end" },
-    chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-    chipText: { fontSize: 12, fontWeight: "600", fontFamily: "Inter_600SemiBold" },
-    statsRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      paddingTop: 10,
-    },
-    statItem: { alignItems: "center", flex: 1 },
-    statValue: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: colors.foreground,
-      fontFamily: "Inter_700Bold",
-    },
-    statLabel: {
-      fontSize: 10,
-      color: colors.mutedForeground,
-      fontFamily: "Inter_400Regular",
-      textAlign: "center",
-    },
-    alertRow: { flexDirection: "row", gap: 6, marginTop: 8 },
-    alertBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 8,
-    },
-    alertText: { fontSize: 10, fontWeight: "700", color: "#fff", fontFamily: "Inter_700Bold" },
-    empty: {
-      alignItems: "center",
-      paddingTop: 80,
-      gap: 12,
-    },
-    emptyText: {
-      fontSize: 16,
-      color: colors.mutedForeground,
-      fontFamily: "Inter_400Regular",
-    },
+    colorLabel: { fontSize: 13, fontFamily: "Inter_500Medium", marginBottom: 10 },
+    colorRow: { flexDirection: "row", gap: 12, paddingHorizontal: 2 },
+    colorDot: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "transparent" },
+    colorDotSelected: { borderColor: colors.foreground },
+    modalBtns: { flexDirection: "row", gap: 12 },
+    cancelBtn: { flex: 1, paddingVertical: 14, alignItems: "center", borderRadius: colors.radius, backgroundColor: colors.muted },
+    cancelText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+    confirmBtn: { flex: 2, paddingVertical: 14, alignItems: "center", borderRadius: colors.radius, backgroundColor: colors.primary },
+    confirmText: { color: "#fff", fontSize: 15, fontWeight: "700", fontFamily: "Inter_700Bold" },
   });

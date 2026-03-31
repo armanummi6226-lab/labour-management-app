@@ -19,8 +19,8 @@ function NativeTabLayout() {
         <Label>Home</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="labourers">
-        <Icon sf={{ default: "person.3", selected: "person.3.fill" }} />
-        <Label>Labourers</Label>
+        <Icon sf={{ default: "building.2", selected: "building.2.fill" }} />
+        <Label>Sites</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="pending">
         <Icon sf={{ default: "exclamationmark.circle", selected: "exclamationmark.circle.fill" }} />
@@ -64,15 +64,9 @@ function ClassicTabLayout() {
         },
         tabBarBackground: () =>
           isIOS ? (
-            <BlurView
-              intensity={100}
-              tint={isDark ? "dark" : "light"}
-              style={StyleSheet.absoluteFill}
-            />
+            <BlurView intensity={100} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
           ) : isWeb ? (
-            <View
-              style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
-            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
           ) : null,
       }}
     >
@@ -91,12 +85,12 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="labourers"
         options={{
-          title: "Labourers",
+          title: "Sites",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="person.3" tintColor={color} size={24} />
+              <SymbolView name="building.2" tintColor={color} size={24} />
             ) : (
-              <Ionicons name="people-outline" size={22} color={color} />
+              <MaterialCommunityIcons name="office-building-outline" size={22} color={color} />
             ),
         }}
       />
