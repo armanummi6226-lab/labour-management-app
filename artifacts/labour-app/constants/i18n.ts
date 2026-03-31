@@ -57,13 +57,13 @@ export const translations = {
     nameRequired: "Name is required",
     rateRequired: "Rate per day is required",
 
-    // Attendance
-    attendance: "Attendance",
-    markPresent: "Mark Present",
-    markAbsent: "Mark Absent",
-    todayPresent: "Present Today",
-    daysWorked: "Days Worked",
-    attendanceHistory: "Attendance History",
+    // Hajri (Attendance)
+    attendance: "Hajri",
+    daysWorked: "Total Hajri",
+    hajriLabel: "Total Hajri (Days Worked)",
+    hajriPlaceholder: "Enter total days e.g. 120",
+    hajriUpdate: "Update Hajri",
+    hajriHint: "Enter the total number of days this labourer has worked",
     present: "Present",
     absent: "Absent",
 
@@ -171,13 +171,13 @@ export const translations = {
     nameRequired: "नाम आवश्यक है",
     rateRequired: "प्रति दिन दर आवश्यक है",
 
-    // Attendance
-    attendance: "उपस्थिति",
-    markPresent: "उपस्थित करें",
-    markAbsent: "अनुपस्थित करें",
-    todayPresent: "आज उपस्थित",
-    daysWorked: "कुल दिन काम",
-    attendanceHistory: "उपस्थिति इतिहास",
+    // Hajri
+    attendance: "हाजिरी",
+    daysWorked: "कुल हाजिरी",
+    hajriLabel: "कुल हाजिरी (काम के दिन)",
+    hajriPlaceholder: "कुल दिन दर्ज करें, जैसे 120",
+    hajriUpdate: "हाजिरी अपडेट करें",
+    hajriHint: "इस मजदूर ने कुल कितने दिन काम किया",
     present: "उपस्थित",
     absent: "अनुपस्थित",
 

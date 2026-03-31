@@ -8,12 +8,6 @@ import React, {
   useState,
 } from "react";
 
-export interface AttendanceRecord {
-  id: string;
-  date: string; // ISO date string YYYY-MM-DD
-  present: boolean;
-}
-
 export interface AdvanceRecord {
   id: string;
   date: string;
@@ -45,7 +39,7 @@ export interface Labour {
   status: LabourStatus;
   createdAt: string;
   notes?: string;
-  attendance: AttendanceRecord[];
+  totalHajri: number;        // Manual entry: total days worked
   advances: AdvanceRecord[];
   payments: PaymentRecord[];
   noteHistory: NoteRecord[];
@@ -66,13 +60,13 @@ interface AppContextValue {
   logout: () => void;
 
   // Labour CRUD
-  addLabour: (data: Omit<Labour, "id" | "createdAt" | "attendance" | "advances" | "payments" | "noteHistory">) => void;
+  addLabour: (data: Omit<Labour, "id" | "createdAt" | "advances" | "payments" | "noteHistory">) => void;
   updateLabour: (id: string, data: Partial<Labour>) => void;
   deleteLabour: (id: string) => void;
   getLabour: (id: string) => Labour | undefined;
 
-  // Attendance
-  markAttendance: (labourId: string, date: string, present: boolean) => void;
+  // Hajri (Total Days)
+  setHajri: (labourId: string, total: number) => void;
 
   // Advances
   addAdvance: (labourId: string, amount: number, note?: string) => void;
@@ -106,10 +100,6 @@ function generateId(): string {
   return Date.now().toString() + Math.random().toString(36).substr(2, 9);
 }
 
-function todayStr(): string {
-  return new Date().toISOString().split("T")[0];
-}
-
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [labourers, setLabourers] = useState<Labour[]>([]);
@@ -123,7 +113,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(STORAGE_KEYS.LABOURERS),
         ]);
         if (userRaw) setUser(JSON.parse(userRaw));
-        if (laboursRaw) setLabourers(JSON.parse(laboursRaw));
+        if (laboursRaw) {
+          // Migrate old records that may have 'attendance' instead of 'totalHajri'
+          const parsed: any[] = JSON.parse(laboursRaw);
+          const migrated: Labour[] = parsed.map((l) => ({
+            ...l,
+            totalHajri: l.totalHajri ?? (l.attendance ? l.attendance.filter((a: any) => a.present).length : 0),
+            advances: l.advances ?? [],
+            payments: l.payments ?? [],
+            noteHistory: l.noteHistory ?? [],
+          }));
+          setLabourers(migrated);
+        }
       } catch {
         // ignore
       } finally {
@@ -149,12 +150,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addLabour = useCallback(
-    (data: Omit<Labour, "id" | "createdAt" | "attendance" | "advances" | "payments" | "noteHistory">) => {
+    (data: Omit<Labour, "id" | "createdAt" | "advances" | "payments" | "noteHistory">) => {
       const newLabour: Labour = {
         ...data,
         id: generateId(),
         createdAt: new Date().toISOString(),
-        attendance: [],
         advances: [],
         payments: [],
         noteHistory: [],
@@ -186,21 +186,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [labourers]
   );
 
-  const markAttendance = useCallback(
-    (labourId: string, date: string, present: boolean) => {
-      const updated = labourers.map((l) => {
-        if (l.id !== labourId) return l;
-        const existing = l.attendance.find((a) => a.date === date);
-        let newAttendance: AttendanceRecord[];
-        if (existing) {
-          newAttendance = l.attendance.map((a) =>
-            a.date === date ? { ...a, present } : a
-          );
-        } else {
-          newAttendance = [...l.attendance, { id: generateId(), date, present }];
-        }
-        return { ...l, attendance: newAttendance };
-      });
+  const setHajri = useCallback(
+    (labourId: string, total: number) => {
+      const updated = labourers.map((l) =>
+        l.id === labourId ? { ...l, totalHajri: Math.max(0, total) } : l
+      );
       saveLabourers(updated);
     },
     [labourers, saveLabourers]
@@ -257,7 +247,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const calcStats = useCallback((labour: Labour) => {
-    const daysWorked = labour.attendance.filter((a) => a.present).length;
+    const daysWorked = labour.totalHajri ?? 0;
     const totalEarned = daysWorked * labour.ratePerDay;
     const totalAdvance = labour.advances.reduce((s, a) => s + a.amount, 0);
     const totalPaid = labour.payments.reduce((s, p) => s + p.amount, 0);
@@ -287,7 +277,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updateLabour,
       deleteLabour,
       getLabour,
-      markAttendance,
+      setHajri,
       addAdvance,
       settlePayment,
       addNote,
@@ -303,7 +293,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updateLabour,
       deleteLabour,
       getLabour,
-      markAttendance,
+      setHajri,
       addAdvance,
       settlePayment,
       addNote,

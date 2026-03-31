@@ -20,7 +20,7 @@ import { useApp } from "@/context/AppContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 
-type Tab = "overview" | "attendance" | "advance" | "ledger";
+type Tab = "overview" | "hajri" | "advance" | "ledger";
 
 export default function LabourDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -30,7 +30,7 @@ export default function LabourDetailScreen() {
     getLabour,
     updateLabour,
     deleteLabour,
-    markAttendance,
+    setHajri,
     addAdvance,
     settlePayment,
     calcStats,
@@ -43,6 +43,7 @@ export default function LabourDetailScreen() {
   const [settleAmount, setSettleAmount] = useState("");
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [showSettleModal, setShowSettleModal] = useState(false);
+  const [hajriInput, setHajriInput] = useState("");
 
   const stats = useMemo(() => labour ? calcStats(labour) : null, [labour, calcStats]);
 
@@ -53,10 +54,6 @@ export default function LabourDetailScreen() {
       </View>
     );
   }
-
-  const today = new Date().toISOString().split("T")[0];
-  const todayAttendance = labour.attendance.find((a) => a.date === today);
-  const isTodayPresent = todayAttendance?.present ?? false;
 
   const handleDelete = () => {
     Alert.alert(t("delete"), t("deleteConfirm"), [
@@ -97,11 +94,27 @@ export default function LabourDetailScreen() {
     setShowSettleModal(false);
   };
 
+  const handleUpdateHajri = () => {
+    const val = Number(hajriInput);
+    if (!hajriInput || isNaN(val) || val < 0) {
+      Alert.alert("", "Kripya sahi number darj karein");
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setHajri(id as string, val);
+    setHajriInput("");
+  };
+
   const styles = makeStyles(colors, insets);
 
-  // Format date
   const fmt = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-  const fmtShort = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+
+  const TABS: { key: Tab; label: string }[] = [
+    { key: "overview", label: t("dashboard") },
+    { key: "hajri", label: t("attendance") },
+    { key: "advance", label: t("advance") },
+    { key: "ledger", label: t("ledger") },
+  ];
 
   return (
     <View style={styles.root}>
@@ -168,28 +181,23 @@ export default function LabourDetailScreen() {
 
       {/* Tabs */}
       <View style={styles.tabBar}>
-        {(["overview", "attendance", "advance", "ledger"] as Tab[]).map((tb) => (
+        {TABS.map(({ key, label }) => (
           <TouchableOpacity
-            key={tb}
-            style={[styles.tabItem, tab === tb && styles.tabItemActive]}
-            onPress={() => setTab(tb)}
+            key={key}
+            style={[styles.tabItem, tab === key && styles.tabItemActive]}
+            onPress={() => setTab(key)}
           >
-            <Text style={[styles.tabText, tab === tb && styles.tabTextActive]}>
-              {tb === "overview" ? t("dashboard")
-                : tb === "attendance" ? t("attendance")
-                : tb === "advance" ? t("advance")
-                : t("ledger")}
-            </Text>
+            <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
       {/* Content */}
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+
         {/* OVERVIEW TAB */}
         {tab === "overview" && (
           <View style={styles.overviewSection}>
-            {/* Settle Payment */}
             {stats.remainingBalance > 0 && (
               <TouchableOpacity
                 style={styles.settleBtn}
@@ -200,12 +208,9 @@ export default function LabourDetailScreen() {
                 <Text style={styles.settleBtnText}>{t("settlePayment")} — ₹{stats.remainingBalance.toLocaleString("en-IN")}</Text>
               </TouchableOpacity>
             )}
-
             <InfoRow label={t("addedOn")} value={fmt(labour.createdAt)} colors={colors} />
             {labour.phone && <InfoRow label={t("phone")} value={labour.phone} colors={colors} />}
             {labour.notes && <InfoRow label={t("notes")} value={labour.notes} colors={colors} />}
-
-            {/* Add Advance Button */}
             <TouchableOpacity
               style={styles.addAdvBtn}
               onPress={() => setShowAdvanceModal(true)}
@@ -217,53 +222,73 @@ export default function LabourDetailScreen() {
           </View>
         )}
 
-        {/* ATTENDANCE TAB */}
-        {tab === "attendance" && (
+        {/* HAJRI TAB */}
+        {tab === "hajri" && (
           <View>
-            {/* Today's Mark */}
-            <View style={styles.todayCard}>
-              <Text style={styles.todayLabel}>{t("todayPresent")}</Text>
-              <View style={styles.attendanceBtns}>
+            {/* Current Hajri Display */}
+            <View style={styles.hajriCard}>
+              <Text style={styles.hajriCardLabel}>{t("hajriLabel")}</Text>
+              <Text style={styles.hajriBigNumber}>{labour.totalHajri}</Text>
+              <Text style={styles.hajriSubtext}>
+                {t("daysWorked")} × ₹{labour.ratePerDay} = ₹{stats.totalEarned.toLocaleString("en-IN")}
+              </Text>
+            </View>
+
+            {/* +/- Quick Adjust */}
+            <View style={styles.hajriAdjRow}>
+              <TouchableOpacity
+                style={[styles.hajriAdjBtn, { backgroundColor: colors.destructive + "15", borderColor: colors.destructive }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setHajri(id as string, Math.max(0, labour.totalHajri - 1));
+                }}
+              >
+                <Ionicons name="remove" size={26} color={colors.destructive} />
+              </TouchableOpacity>
+              <View style={styles.hajriCounterDisplay}>
+                <Text style={styles.hajriCounterText}>{labour.totalHajri}</Text>
+                <Text style={styles.hajriCounterLabel}>{t("daysWorked")}</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.hajriAdjBtn, { backgroundColor: colors.success + "15", borderColor: colors.success }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setHajri(id as string, labour.totalHajri + 1);
+                }}
+              >
+                <Ionicons name="add" size={26} color={colors.success} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Manual Entry */}
+            <View style={styles.hajriManualCard}>
+              <Text style={styles.hajriManualLabel}>{t("hajriHint")}</Text>
+              <View style={styles.hajriInputRow}>
+                <TextInput
+                  style={styles.hajriInput}
+                  placeholder={t("hajriPlaceholder")}
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="numeric"
+                  value={hajriInput}
+                  onChangeText={setHajriInput}
+                />
                 <TouchableOpacity
-                  style={[styles.attBtn, isTodayPresent && styles.attBtnPresent]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    markAttendance(id as string, today, true);
-                  }}
+                  style={styles.hajriSaveBtn}
+                  onPress={handleUpdateHajri}
+                  activeOpacity={0.85}
                 >
-                  <Ionicons name="checkmark" size={20} color={isTodayPresent ? colors.successForeground : colors.success} />
-                  <Text style={[styles.attBtnText, isTodayPresent && { color: colors.successForeground }]}>{t("present")}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.attBtn, !isTodayPresent && todayAttendance && styles.attBtnAbsent]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    markAttendance(id as string, today, false);
-                  }}
-                >
-                  <Ionicons name="close" size={20} color={(!isTodayPresent && todayAttendance) ? colors.destructiveForeground : colors.destructive} />
-                  <Text style={[styles.attBtnText, (!isTodayPresent && todayAttendance) && { color: colors.destructiveForeground }]}>{t("absent")}</Text>
+                  <Text style={styles.hajriSaveBtnText}>{t("hajriUpdate")}</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* History */}
-            <Text style={styles.histTitle}>{t("attendanceHistory")}</Text>
-            {[...labour.attendance]
-              .sort((a, b) => b.date.localeCompare(a.date))
-              .map((a) => (
-                <View key={a.id} style={styles.attRecord}>
-                  <Text style={styles.attDate}>{fmt(a.date)}</Text>
-                  <View style={[styles.attChip, { backgroundColor: a.present ? colors.success + "20" : colors.destructive + "20" }]}>
-                    <Text style={[styles.attChipText, { color: a.present ? colors.success : colors.destructive }]}>
-                      {a.present ? t("present") : t("absent")}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            {labour.attendance.length === 0 && (
-              <Text style={styles.emptyMsg}>{t("noLabourers")}</Text>
-            )}
+            {/* Info Note */}
+            <View style={[styles.hajriInfoBox, { backgroundColor: colors.info + "15", borderColor: colors.info + "40" }]}>
+              <Ionicons name="information-circle" size={18} color={colors.info} />
+              <Text style={[styles.hajriInfoText, { color: colors.info }]}>
+                {"  "}Total Hajri × ₹{labour.ratePerDay}/day = ₹{stats.totalEarned.toLocaleString("en-IN")} {t("totalEarned")}
+              </Text>
+            </View>
           </View>
         )}
 
@@ -303,54 +328,75 @@ export default function LabourDetailScreen() {
         {/* LEDGER TAB */}
         {tab === "ledger" && (
           <View>
-            {/* All entries sorted by date */}
-            {[
-              ...labour.attendance.filter((a) => a.present).map((a) => ({ type: "work" as const, date: a.date, id: a.id })),
-              ...labour.advances.map((a) => ({ type: "advance" as const, date: a.date, id: a.id, amount: a.amount, note: a.note })),
-              ...labour.payments.map((p) => ({ type: "payment" as const, date: p.date, id: p.id, amount: p.amount, note: p.note })),
-            ]
+            {/* Hajri summary row */}
+            <View style={[styles.ledgerRow, { backgroundColor: colors.success + "12", borderRadius: colors.radius, marginBottom: 4 }]}>
+              <View style={[styles.ledgerIcon, { backgroundColor: colors.success + "20" }]}>
+                <Ionicons name="calendar" size={20} color={colors.success} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.ledgerDate}>{t("daysWorked")}</Text>
+                <Text style={styles.ledgerType}>{labour.totalHajri} days × ₹{labour.ratePerDay}</Text>
+              </View>
+              <Text style={[styles.ledgerAmount, { color: colors.success }]}>
+                +₹{stats.totalEarned.toLocaleString("en-IN")}
+              </Text>
+            </View>
+
+            {/* Advances */}
+            {[...labour.advances]
               .sort((a, b) => b.date.localeCompare(a.date))
-              .map((entry) => (
-                <View key={entry.id} style={styles.ledgerRow}>
-                  <View style={[styles.ledgerIcon, {
-                    backgroundColor: entry.type === "work"
-                      ? colors.success + "20"
-                      : entry.type === "advance"
-                      ? colors.warning + "20"
-                      : colors.info + "20",
-                  }]}>
-                    {entry.type === "work"
-                      ? <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                      : entry.type === "advance"
-                      ? <MaterialCommunityIcons name="currency-inr" size={20} color={colors.warning} />
-                      : <Ionicons name="cash" size={20} color={colors.info} />}
+              .map((a) => (
+                <View key={a.id} style={styles.ledgerRow}>
+                  <View style={[styles.ledgerIcon, { backgroundColor: colors.warning + "20" }]}>
+                    <MaterialCommunityIcons name="currency-inr" size={20} color={colors.warning} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.ledgerDate}>{fmt(entry.date)}</Text>
-                    <Text style={styles.ledgerType}>
-                      {entry.type === "work" ? t("dateWorked")
-                        : entry.type === "advance" ? t("advanceTaken")
-                        : t("paymentMade")}
-                    </Text>
-                    {(entry as any).note && <Text style={styles.ledgerNote}>{(entry as any).note}</Text>}
+                    <Text style={styles.ledgerDate}>{fmt(a.date)}</Text>
+                    <Text style={styles.ledgerType}>{t("advanceTaken")}</Text>
+                    {a.note && <Text style={styles.ledgerNote}>{a.note}</Text>}
                   </View>
-                  {entry.type !== "work" && (
-                    <Text style={[styles.ledgerAmount, {
-                      color: entry.type === "advance" ? colors.warning : colors.info,
-                    }]}>
-                      {entry.type === "advance" ? "-" : "+"}₹{(entry as any).amount?.toLocaleString("en-IN")}
-                    </Text>
-                  )}
-                  {entry.type === "work" && (
-                    <Text style={[styles.ledgerAmount, { color: colors.success }]}>
-                      +₹{labour.ratePerDay.toLocaleString("en-IN")}
-                    </Text>
-                  )}
+                  <Text style={[styles.ledgerAmount, { color: colors.warning }]}>-₹{a.amount.toLocaleString("en-IN")}</Text>
                 </View>
               ))}
-            {labour.attendance.length === 0 && labour.advances.length === 0 && labour.payments.length === 0 && (
+
+            {/* Payments */}
+            {[...labour.payments]
+              .sort((a, b) => b.date.localeCompare(a.date))
+              .map((p) => (
+                <View key={p.id} style={styles.ledgerRow}>
+                  <View style={[styles.ledgerIcon, { backgroundColor: colors.info + "20" }]}>
+                    <Ionicons name="cash" size={20} color={colors.info} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.ledgerDate}>{fmt(p.date)}</Text>
+                    <Text style={styles.ledgerType}>{t("paymentMade")}</Text>
+                    {p.note && <Text style={styles.ledgerNote}>{p.note}</Text>}
+                  </View>
+                  <Text style={[styles.ledgerAmount, { color: colors.info }]}>+₹{p.amount.toLocaleString("en-IN")}</Text>
+                </View>
+              ))}
+
+            {labour.advances.length === 0 && labour.payments.length === 0 && (
               <Text style={styles.emptyMsg}>{t("noLabourers")}</Text>
             )}
+
+            {/* Balance Summary */}
+            <View style={[styles.ledgerRow, {
+              backgroundColor: stats.remainingBalance >= 0 ? colors.success + "12" : colors.destructive + "12",
+              borderRadius: colors.radius,
+              marginTop: 8,
+            }]}>
+              <View style={[styles.ledgerIcon, { backgroundColor: stats.remainingBalance >= 0 ? colors.success + "30" : colors.destructive + "30" }]}>
+                <Ionicons name="wallet" size={20} color={stats.remainingBalance >= 0 ? colors.success : colors.destructive} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.ledgerDate, { fontWeight: "700" }]}>{t("remainingBalance")}</Text>
+                <Text style={styles.ledgerType}>Earned - Advance - Paid</Text>
+              </View>
+              <Text style={[styles.ledgerAmount, { color: stats.remainingBalance >= 0 ? colors.success : colors.destructive, fontSize: 15 }]}>
+                ₹{Math.abs(stats.remainingBalance).toLocaleString("en-IN")}
+              </Text>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -547,55 +593,171 @@ const makeStyles = (colors: ReturnType<typeof import("@/hooks/useColors").useCol
       fontWeight: "600",
       fontFamily: "Inter_600SemiBold",
     },
-    todayCard: {
+
+    // Hajri styles
+    hajriCard: {
+      backgroundColor: colors.primary + "15",
+      borderWidth: 1.5,
+      borderColor: colors.primary + "40",
+      borderRadius: colors.radius,
+      padding: 20,
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    hajriCardLabel: {
+      fontSize: 13,
+      color: colors.primary,
+      fontFamily: "Inter_600SemiBold",
+      marginBottom: 6,
+      textTransform: "uppercase",
+      letterSpacing: 0.8,
+    },
+    hajriBigNumber: {
+      fontSize: 64,
+      fontWeight: "900",
+      color: colors.primary,
+      fontFamily: "Inter_700Bold",
+      lineHeight: 72,
+    },
+    hajriSubtext: {
+      fontSize: 13,
+      color: colors.mutedForeground,
+      fontFamily: "Inter_400Regular",
+      marginTop: 4,
+    },
+    hajriAdjRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 16,
+      marginBottom: 16,
+      justifyContent: "center",
+    },
+    hajriAdjBtn: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 2,
+    },
+    hajriCounterDisplay: {
+      alignItems: "center",
+      flex: 1,
+    },
+    hajriCounterText: {
+      fontSize: 36,
+      fontWeight: "800",
+      color: colors.foreground,
+      fontFamily: "Inter_700Bold",
+    },
+    hajriCounterLabel: {
+      fontSize: 11,
+      color: colors.mutedForeground,
+      fontFamily: "Inter_400Regular",
+    },
+    hajriManualCard: {
       backgroundColor: colors.card,
       borderRadius: colors.radius,
       padding: 16,
-      marginBottom: 16,
+      marginBottom: 12,
     },
-    todayLabel: { fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginBottom: 12 },
-    attendanceBtns: { flexDirection: "row", gap: 12 },
-    attBtn: {
-      flex: 1,
+    hajriManualLabel: {
+      fontSize: 13,
+      color: colors.mutedForeground,
+      fontFamily: "Inter_400Regular",
+      marginBottom: 12,
+    },
+    hajriInputRow: {
       flexDirection: "row",
+      gap: 10,
       alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      borderRadius: colors.radius,
+    },
+    hajriInput: {
+      flex: 1,
+      backgroundColor: colors.background,
       borderWidth: 1.5,
       borderColor: colors.border,
+      borderRadius: colors.radius - 2,
+      padding: 12,
+      fontSize: 16,
+      color: colors.foreground,
+      fontFamily: "Inter_500Medium",
+    },
+    hajriSaveBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: colors.radius - 2,
       paddingVertical: 12,
-      backgroundColor: colors.background,
+      paddingHorizontal: 16,
     },
-    attBtnPresent: { backgroundColor: colors.success, borderColor: colors.success },
-    attBtnAbsent: { backgroundColor: colors.destructive, borderColor: colors.destructive },
-    attBtnText: { fontSize: 14, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold" },
-    histTitle: { fontSize: 14, fontWeight: "700", color: colors.foreground, marginBottom: 10, fontFamily: "Inter_700Bold" },
-    attRecord: {
+    hajriSaveBtnText: {
+      color: "#fff",
+      fontSize: 14,
+      fontWeight: "700",
+      fontFamily: "Inter_700Bold",
+    },
+    hajriInfoBox: {
       flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingVertical: 10,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      alignItems: "flex-start",
+      borderWidth: 1,
+      borderRadius: colors.radius,
+      padding: 12,
     },
-    attDate: { fontSize: 14, color: colors.foreground, fontFamily: "Inter_400Regular" },
-    attChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-    attChipText: { fontSize: 12, fontWeight: "600", fontFamily: "Inter_600SemiBold" },
+    hajriInfoText: {
+      fontSize: 13,
+      fontFamily: "Inter_400Regular",
+      flex: 1,
+    },
+
+    histTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.foreground,
+      fontFamily: "Inter_700Bold",
+      marginBottom: 12,
+    },
     ledgerRow: {
       flexDirection: "row",
       alignItems: "center",
+      gap: 12,
       paddingVertical: 10,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
-      gap: 12,
     },
-    ledgerIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-    ledgerDate: { fontSize: 13, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold" },
-    ledgerType: { fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-    ledgerNote: { fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontStyle: "italic" },
-    ledgerAmount: { fontSize: 14, fontWeight: "700", fontFamily: "Inter_700Bold" },
-    emptyMsg: { fontSize: 14, color: colors.mutedForeground, textAlign: "center", paddingTop: 32, fontFamily: "Inter_400Regular" },
+    ledgerIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    ledgerDate: {
+      fontSize: 13,
+      color: colors.foreground,
+      fontFamily: "Inter_500Medium",
+    },
+    ledgerType: {
+      fontSize: 11,
+      color: colors.mutedForeground,
+      fontFamily: "Inter_400Regular",
+    },
+    ledgerNote: {
+      fontSize: 11,
+      color: colors.mutedForeground,
+      fontFamily: "Inter_400Regular",
+      fontStyle: "italic",
+    },
+    ledgerAmount: {
+      fontSize: 14,
+      fontWeight: "700",
+      fontFamily: "Inter_700Bold",
+    },
+    emptyMsg: {
+      fontSize: 14,
+      color: colors.mutedForeground,
+      fontFamily: "Inter_400Regular",
+      textAlign: "center",
+      paddingVertical: 32,
+    },
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.5)",
@@ -603,42 +765,70 @@ const makeStyles = (colors: ReturnType<typeof import("@/hooks/useColors").useCol
     },
     modal: {
       backgroundColor: colors.card,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
       padding: 24,
-      paddingBottom: insets.bottom + 24,
+      paddingBottom: 40,
     },
-    modalTitle: { fontSize: 20, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold", marginBottom: 4 },
-    modalSubtitle: { fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginBottom: 16 },
-    amountRow: { flexDirection: "row", alignItems: "center", marginBottom: 20 },
-    rupeeSign: { fontSize: 22, fontWeight: "700", color: colors.foreground, marginRight: 8, fontFamily: "Inter_700Bold" },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.foreground,
+      fontFamily: "Inter_700Bold",
+      marginBottom: 8,
+    },
+    modalSubtitle: {
+      fontSize: 14,
+      color: colors.mutedForeground,
+      fontFamily: "Inter_400Regular",
+      marginBottom: 16,
+    },
+    amountRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 20,
+    },
+    rupeeSign: {
+      fontSize: 24,
+      color: colors.foreground,
+      fontFamily: "Inter_700Bold",
+    },
     modalInput: {
       flex: 1,
-      borderWidth: 1.5,
-      borderColor: colors.border,
-      borderRadius: colors.radius,
-      paddingHorizontal: 14,
-      paddingVertical: 13,
-      fontSize: 20,
+      fontSize: 28,
       color: colors.foreground,
-      fontFamily: "Inter_500Medium",
+      fontFamily: "Inter_700Bold",
+      borderBottomWidth: 2,
+      borderBottomColor: colors.primary,
+      paddingVertical: 4,
     },
-    modalBtns: { flexDirection: "row", gap: 12 },
+    modalBtns: {
+      flexDirection: "row",
+      gap: 12,
+    },
     modalCancel: {
       flex: 1,
-      borderWidth: 1.5,
-      borderColor: colors.border,
-      borderRadius: colors.radius,
       paddingVertical: 14,
       alignItems: "center",
+      borderRadius: colors.radius,
+      backgroundColor: colors.muted,
     },
-    modalCancelText: { fontSize: 15, fontWeight: "600", fontFamily: "Inter_600SemiBold" },
+    modalCancelText: {
+      fontSize: 15,
+      fontFamily: "Inter_600SemiBold",
+    },
     modalConfirm: {
-      flex: 1,
-      backgroundColor: colors.primary,
-      borderRadius: colors.radius,
+      flex: 2,
       paddingVertical: 14,
       alignItems: "center",
+      borderRadius: colors.radius,
+      backgroundColor: colors.primary,
     },
-    modalConfirmText: { color: "#fff", fontSize: 15, fontWeight: "700", fontFamily: "Inter_700Bold" },
+    modalConfirmText: {
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: "700",
+      fontFamily: "Inter_700Bold",
+    },
   });

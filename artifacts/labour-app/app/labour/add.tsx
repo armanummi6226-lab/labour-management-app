@@ -59,6 +59,7 @@ export default function AddLabourScreen() {
       ratePerDay: Number(ratePerDay),
       notes: notes.trim() || undefined,
       status: "active",
+      totalHajri: 0,
     });
     router.back();
   };
