@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/"
+title = "Labour & Advance Management"
+version = "1.0.0"
+id = "artifacts/labour-app"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/" ]
+localPort = 22628
+
+[services.development]
+run = "pnpm --filter @workspace/labour-app run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/labour-app", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/labour-app", "run", "serve" ]
+
+[services.env]
+PORT = "22628"
+BASE_PATH = "/"

@@ -1,0 +1,14 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "BRqw_8FaPYeRCmvIEOgb9"
+uri = "file://artifacts/labour-app/assets/images/icon.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "CoQlQHR5CKe1pfRlJHASI"
+uri = "file://artifacts/labour-app/assets/images/splash-icon.png"
+type = "image"
+title = "generated_image"

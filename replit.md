@@ -48,6 +48,40 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 - `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
 - `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
 
+## Artifacts
+
+### `artifacts/labour-app` — Labour & Advance Management Mobile App
+
+Expo React Native app for contractors and labour masters.
+
+**Features:**
+- OTP-based login (demo OTP: 1234)
+- Dashboard with live stats (active labourers, pending advance, cleared this month, alerts)
+- Labour/Customer profile management with CRUD
+- Daily attendance tracking (present/absent per day)
+- Advance payment entry with date auto-capture
+- Auto-calculation engine: Total Earned = Days × Rate; Balance = Earned - Advance - Payments
+- Payment settlement with "Settle Payment" button and ledger
+- Pending/Alert tab for labourers with outstanding advances
+- Full Hindi/English language toggle
+- Dark mode + Light mode support (system-based)
+- All data persisted locally via AsyncStorage (no backend required)
+
+**Key Files:**
+- `app/_layout.tsx` — Root layout with providers (AppProvider, LanguageProvider)
+- `app/(tabs)/_layout.tsx` — Tab navigation (Home, Labourers, Pending, Settings)
+- `app/(tabs)/index.tsx` — Dashboard screen
+- `app/(tabs)/labourers.tsx` — Labour list with search and filter
+- `app/(tabs)/pending.tsx` — Pending alerts tab
+- `app/(tabs)/settings.tsx` — Language, logout, stats
+- `app/auth/login.tsx` — Mobile OTP login
+- `app/labour/add.tsx` — Add new labourer form
+- `app/labour/[id].tsx` — Labour detail (overview, attendance, advance, ledger tabs)
+- `context/AppContext.tsx` — Global state + AsyncStorage persistence
+- `context/LanguageContext.tsx` — Hindi/English i18n
+- `constants/i18n.ts` — All translations (English + Hindi)
+- `constants/colors.ts` — Orange + dark theme design tokens
+
 ## Packages
 
 ### `artifacts/api-server` (`@workspace/api-server`)
