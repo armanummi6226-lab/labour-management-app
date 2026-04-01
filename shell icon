@@ -1,0 +1,2 @@
+npx expo export
+npx eas build -p android
