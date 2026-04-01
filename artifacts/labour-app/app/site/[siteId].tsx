@@ -27,7 +27,7 @@ export default function SiteDetailScreen() {
   const { t } = useLanguage();
   const {
     getSite, updateSite, deleteSite, deleteSiteExpense,
-    getLaboursForSite, calcStats, calcSiteStats, addSiteExpense,
+    getLaboursForSite, deleteLabour, calcStats, calcSiteStats, addSiteExpense,
   } = useApp();
   const insets = useSafeAreaInsets();
 
@@ -89,6 +89,24 @@ export default function SiteDetailScreen() {
     setShowEditModal(false);
   };
 
+  const handleDeleteLabour = (labourId: string, labourName: string) => {
+    Alert.alert(
+      t("delete"),
+      `Delete "${labourName}"? ${t("deleteConfirm")}`,
+      [
+        { text: t("cancel"), style: "cancel" },
+        {
+          text: t("confirm"),
+          style: "destructive",
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            deleteLabour(labourId);
+          },
+        },
+      ]
+    );
+  };
+
   const handleDeleteSite = () => {
     Alert.alert(t("deleteSite"), t("deleteSiteConfirm"), [
       { text: t("cancel"), style: "cancel" },
@@ -109,35 +127,45 @@ export default function SiteDetailScreen() {
   const renderLabour = ({ item }: { item: Labour }) => {
     const s = calcStats(item);
     return (
-      <TouchableOpacity
-        style={styles.labourCard}
-        onPress={() => router.push(`/labour/${item.id}` as any)}
-        activeOpacity={0.75}
-      >
-        <View style={styles.labourAvatar}>
-          <Text style={styles.labourAvatarText}>{item.name.charAt(0).toUpperCase()}</Text>
-        </View>
-        <View style={styles.labourInfo}>
-          <Text style={styles.labourName}>{item.name}</Text>
-          <Text style={styles.labourMeta}>{item.workType || "-"} • ₹{item.ratePerDay}/day • {s.daysWorked}d Hajri</Text>
-        </View>
-        <View style={{ alignItems: "flex-end" }}>
-          {s.isLeftWithAdvance ? (
-            <View style={[styles.badge, { backgroundColor: colors.destructive }]}>
-              <Text style={styles.badgeText}>{t("leftWithAdvance")}</Text>
-            </View>
-          ) : s.isAdvancePending ? (
-            <View style={[styles.badge, { backgroundColor: colors.warning }]}>
-              <Text style={styles.badgeText}>{t("advancePendingBadge")}</Text>
-            </View>
-          ) : (
-            <Text style={{ fontSize: 13, fontWeight: "700", color: s.remainingBalance >= 0 ? colors.success : colors.destructive }}>
-              {s.remainingBalance >= 0 ? "+" : ""}{fmt(s.remainingBalance)}
-            </Text>
-          )}
-          <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} style={{ marginTop: 4 }} />
-        </View>
-      </TouchableOpacity>
+      <View style={styles.labourCard}>
+        <TouchableOpacity
+          style={styles.labourCardInner}
+          onPress={() => router.push(`/labour/${item.id}` as any)}
+          activeOpacity={0.75}
+        >
+          <View style={styles.labourAvatar}>
+            <Text style={styles.labourAvatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+          </View>
+          <View style={styles.labourInfo}>
+            <Text style={styles.labourName}>{item.name}</Text>
+            <Text style={styles.labourMeta}>{item.workType || "-"} • ₹{item.ratePerDay}/day • {s.daysWorked}d</Text>
+          </View>
+          <View style={{ alignItems: "flex-end", marginRight: 8 }}>
+            {s.isLeftWithAdvance ? (
+              <View style={[styles.badge, { backgroundColor: colors.destructive }]}>
+                <Text style={styles.badgeText}>{t("leftWithAdvance")}</Text>
+              </View>
+            ) : s.isAdvancePending ? (
+              <View style={[styles.badge, { backgroundColor: colors.warning }]}>
+                <Text style={styles.badgeText}>{t("advancePendingBadge")}</Text>
+              </View>
+            ) : (
+              <Text style={{ fontSize: 12, fontWeight: "700", color: s.remainingBalance >= 0 ? colors.success : colors.destructive }}>
+                {s.remainingBalance >= 0 ? "+" : ""}{fmt(s.remainingBalance)}
+              </Text>
+            )}
+            <Ionicons name="chevron-forward" size={14} color={colors.mutedForeground} style={{ marginTop: 4 }} />
+          </View>
+        </TouchableOpacity>
+        {/* Delete button at the right edge */}
+        <TouchableOpacity
+          style={styles.labourDeleteBtn}
+          onPress={() => handleDeleteLabour(item.id, item.name)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="trash-outline" size={16} color={colors.destructive} />
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -362,7 +390,19 @@ const makeStyles = (colors: ReturnType<typeof import("@/hooks/useColors").useCol
     tabItemActive: { elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.15, shadowRadius: 3 },
     tabText: { fontSize: 12, fontWeight: "600", fontFamily: "Inter_600SemiBold" },
     list: { paddingHorizontal: 16, paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 100) },
-    labourCard: { backgroundColor: colors.card, borderRadius: colors.radius, padding: 12, flexDirection: "row", alignItems: "center", marginBottom: 8, elevation: 1, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3 },
+    labourCard: {
+      backgroundColor: colors.card, borderRadius: colors.radius,
+      flexDirection: "row", alignItems: "center", marginBottom: 8,
+      elevation: 1, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3,
+      overflow: "hidden",
+    },
+    labourCardInner: { flex: 1, flexDirection: "row", alignItems: "center", padding: 12 },
+    labourDeleteBtn: {
+      width: 44, height: "100%" as any,
+      backgroundColor: colors.destructive + "10",
+      borderLeftWidth: 1, borderLeftColor: colors.destructive + "20",
+      alignItems: "center", justifyContent: "center",
+    },
     labourAvatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", marginRight: 10 },
     labourAvatarText: { fontSize: 17, fontWeight: "700", color: colors.primary, fontFamily: "Inter_700Bold" },
     labourInfo: { flex: 1 },

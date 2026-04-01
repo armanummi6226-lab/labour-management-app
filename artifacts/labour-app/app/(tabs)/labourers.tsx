@@ -69,20 +69,19 @@ export default function SitesScreen() {
     const ss = calcSiteStats(item.id);
     const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`;
     return (
-      <TouchableOpacity
-        style={styles.siteCard}
-        onPress={() => {
-          Haptics.selectionAsync();
-          router.push(`/site/${item.id}` as any);
-        }}
-        onLongPress={() => handleDeleteSite(item)}
-        activeOpacity={0.75}
-      >
+      <View style={styles.siteCard}>
         <View style={[styles.siteColorBar, { backgroundColor: item.color }]} />
         <View style={styles.siteContent}>
+          {/* Top row: name + alert + open + delete */}
           <View style={styles.siteTopRow}>
             <View style={[styles.siteDot, { backgroundColor: item.color }]} />
-            <Text style={styles.siteName}>{item.name}</Text>
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              onPress={() => { Haptics.selectionAsync(); router.push(`/site/${item.id}` as any); }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.siteName}>{item.name}</Text>
+            </TouchableOpacity>
             {ss.alertCount > 0 && (
               <View style={[styles.alertBadge, { backgroundColor: colors.destructive }]}>
                 <Ionicons name="warning" size={10} color="#fff" />
@@ -91,12 +90,13 @@ export default function SitesScreen() {
             )}
             <TouchableOpacity
               style={styles.arrowBtn}
-              onPress={() => router.push(`/site/${item.id}` as any)}
+              onPress={() => { Haptics.selectionAsync(); router.push(`/site/${item.id}` as any); }}
             >
               <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
 
+          {/* Stats pills */}
           <View style={styles.siteStats}>
             <StatPill label={t("totalLabourers")} value={ss.activeCount.toString()} color={colors.info} colors={colors} />
             <StatPill label={t("siteLabourCost")} value={fmt(ss.labourCost)} color={colors.success} colors={colors} />
@@ -104,12 +104,21 @@ export default function SitesScreen() {
             <StatPill label={t("siteOtherExpense")} value={fmt(ss.otherExpenses)} color={colors.mutedForeground} colors={colors} />
           </View>
 
+          {/* Bottom row: net cost + delete button */}
           <View style={styles.siteNetRow}>
             <Text style={styles.siteNetLabel}>{t("siteNetCost")}</Text>
             <Text style={[styles.siteNetValue, { color: colors.foreground }]}>{fmt(ss.netCost)}</Text>
+            <TouchableOpacity
+              style={styles.deleteSiteBtn}
+              onPress={() => handleDeleteSite(item)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="trash-outline" size={15} color={colors.destructive} />
+              <Text style={[styles.deleteSiteTxt, { color: colors.destructive }]}>{t("deleteSite")}</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -261,9 +270,16 @@ const makeStyles = (colors: ReturnType<typeof import("@/hooks/useColors").useCol
     alertBadgeText: { fontSize: 10, color: "#fff", fontWeight: "700", fontFamily: "Inter_700Bold" },
     arrowBtn: { padding: 4 },
     siteStats: { flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, marginBottom: 10, gap: 4 },
-    siteNetRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    siteNetRow: { flexDirection: "row", alignItems: "center", gap: 8 },
     siteNetLabel: { fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_500Medium" },
-    siteNetValue: { fontSize: 16, fontWeight: "800", fontFamily: "Inter_700Bold" },
+    siteNetValue: { flex: 1, fontSize: 16, fontWeight: "800", fontFamily: "Inter_700Bold" },
+    deleteSiteBtn: {
+      flexDirection: "row", alignItems: "center", gap: 4,
+      paddingHorizontal: 10, paddingVertical: 5,
+      borderRadius: 8, backgroundColor: colors.destructive + "12",
+      borderWidth: 1, borderColor: colors.destructive + "30",
+    },
+    deleteSiteTxt: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
     empty: { alignItems: "center", paddingTop: 80, gap: 12 },
     emptyTitle: { fontSize: 18, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold" },
     emptySubtitle: { fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center" },

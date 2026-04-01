@@ -368,30 +368,70 @@ export default function LabourDetailScreen() {
         {/* ── ADVANCE ──────────────────────────────────────────────────────── */}
         {tab === "advance" && (
           <View>
+            {/* Add advance button */}
             <TouchableOpacity style={styles.addAdvBtn} onPress={() => setShowAdvanceModal(true)} activeOpacity={0.85}>
               <Ionicons name="add-circle" size={20} color={colors.warning} />
               <Text style={styles.addAdvText}>{t("addAdvance")}</Text>
             </TouchableOpacity>
 
-            <Text style={styles.histTitle}>{t("totalAdvanceTaken")}: {fmt(stats.totalAdvance)}</Text>
+            {/* Summary card */}
+            <View style={styles.advanceSummaryCard}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.advanceSummaryLabel}>{t("totalAdvanceTaken")}</Text>
+                <Text style={styles.advanceSummaryAmt}>₹{stats.totalAdvance.toLocaleString("en-IN")}</Text>
+              </View>
+              <View style={[styles.advanceSummaryBadge, { backgroundColor: colors.warning + "20" }]}>
+                <MaterialCommunityIcons name="currency-inr" size={22} color={colors.warning} />
+                <Text style={[styles.advanceSummaryCount, { color: colors.warning }]}>{labour.advances.length} {t("entries")}</Text>
+              </View>
+            </View>
 
-            {[...labour.advances].sort((a, b) => b.date.localeCompare(a.date)).map((a) => (
-              <View key={a.id} style={styles.ledgerRow}>
-                <View style={[styles.ledgerIcon, { backgroundColor: colors.warning + "20" }]}>
-                  <MaterialCommunityIcons name="currency-inr" size={20} color={colors.warning} />
+            {/* History header */}
+            <View style={styles.historyHeaderRow}>
+              <Ionicons name="time-outline" size={15} color={colors.mutedForeground} />
+              <Text style={styles.historyHeaderText}>{t("advanceHistory")}</Text>
+            </View>
+
+            {/* Advance entries */}
+            {[...labour.advances].sort((a, b) => b.date.localeCompare(a.date)).map((a, idx, arr) => (
+              <View key={a.id} style={styles.advanceHistoryCard}>
+                {/* Date badge */}
+                <View style={styles.advanceHistoryLeft}>
+                  <View style={[styles.advanceDotLine, { backgroundColor: idx === arr.length - 1 ? "transparent" : colors.border }]} />
+                  <View style={[styles.advanceDot, { backgroundColor: colors.warning }]} />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.ledgerDate}>{fmtDate(a.date)}</Text>
-                  {a.note ? <Text style={styles.ledgerNote}>📝 {a.note}</Text> : null}
+                <View style={styles.advanceHistoryContent}>
+                  <View style={styles.advanceHistoryRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.advanceHistoryDate}>
+                        {new Date(a.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                      </Text>
+                      {a.note ? (
+                        <View style={styles.advanceNoteRow}>
+                          <Ionicons name="document-text-outline" size={11} color={colors.mutedForeground} />
+                          <Text style={styles.advanceNoteText}>{a.note}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text style={styles.advanceHistoryAmt}>-₹{a.amount.toLocaleString("en-IN")}</Text>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteAdvance(a.id, a.amount)}
+                      style={styles.advanceDeleteBtn}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Feather name="trash-2" size={14} color={colors.destructive} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <Text style={[styles.ledgerAmt, { color: colors.warning }]}>-₹{a.amount.toLocaleString("en-IN")}</Text>
-                <TouchableOpacity onPress={() => handleDeleteAdvance(a.id, a.amount)} style={{ paddingLeft: 12 }}>
-                  <Feather name="trash-2" size={16} color={colors.destructive} />
-                </TouchableOpacity>
               </View>
             ))}
 
-            {labour.advances.length === 0 && <Text style={styles.emptyMsg}>{t("noLabourers")}</Text>}
+            {labour.advances.length === 0 && (
+              <View style={styles.advanceEmptyBox}>
+                <MaterialCommunityIcons name="currency-inr" size={32} color={colors.mutedForeground} />
+                <Text style={styles.emptyMsg}>{t("noAdvanceHistory")}</Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -689,8 +729,35 @@ const makeStyles = (colors: ReturnType<typeof import("@/hooks/useColors").useCol
       borderRadius: colors.radius, padding: 12, marginBottom: 12,
     },
     shareBtnText: { fontSize: 14, fontWeight: "600", fontFamily: "Inter_600SemiBold" },
-    addAdvBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.warning, borderRadius: colors.radius, padding: 14, marginTop: 12 },
+    addAdvBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.warning, borderRadius: colors.radius, padding: 14, marginTop: 12, marginBottom: 10 },
     addAdvText: { color: colors.warning, fontSize: 15, fontWeight: "600", fontFamily: "Inter_600SemiBold" },
+    advanceSummaryCard: {
+      flexDirection: "row", alignItems: "center",
+      backgroundColor: colors.warning + "12", borderWidth: 1, borderColor: colors.warning + "30",
+      borderRadius: colors.radius, padding: 14, marginBottom: 14,
+    },
+    advanceSummaryLabel: { fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+    advanceSummaryAmt: { fontSize: 22, fontWeight: "800", color: colors.warning, fontFamily: "Inter_700Bold", marginTop: 2 },
+    advanceSummaryBadge: { alignItems: "center", justifyContent: "center", borderRadius: colors.radius, paddingHorizontal: 14, paddingVertical: 8, gap: 4 },
+    advanceSummaryCount: { fontSize: 11, fontWeight: "700", fontFamily: "Inter_700Bold" },
+    historyHeaderRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 },
+    historyHeaderText: { fontSize: 13, fontWeight: "700", color: colors.mutedForeground, fontFamily: "Inter_700Bold", textTransform: "uppercase", letterSpacing: 0.6 },
+    advanceHistoryCard: { flexDirection: "row", alignItems: "flex-start", marginBottom: 0 },
+    advanceHistoryLeft: { width: 24, alignItems: "center", marginRight: 10, paddingTop: 4 },
+    advanceDot: { width: 10, height: 10, borderRadius: 5, zIndex: 1 },
+    advanceDotLine: { position: "absolute", width: 2, top: 14, bottom: -14, left: 11 },
+    advanceHistoryContent: {
+      flex: 1, backgroundColor: colors.card, borderRadius: colors.radius,
+      padding: 12, marginBottom: 8,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    advanceHistoryRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+    advanceHistoryDate: { fontSize: 13, fontWeight: "600", color: colors.foreground, fontFamily: "Inter_600SemiBold" },
+    advanceNoteRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 },
+    advanceNoteText: { fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", flex: 1 },
+    advanceHistoryAmt: { fontSize: 14, fontWeight: "800", color: colors.warning, fontFamily: "Inter_700Bold" },
+    advanceDeleteBtn: { padding: 4, borderRadius: 6, backgroundColor: colors.destructive + "10" },
+    advanceEmptyBox: { alignItems: "center", paddingVertical: 32, gap: 8 },
 
     // Hajri
     hajriCard: { backgroundColor: colors.primary + "12", borderWidth: 1.5, borderColor: colors.primary + "40", borderRadius: colors.radius, padding: 20, alignItems: "center", marginBottom: 14 },
