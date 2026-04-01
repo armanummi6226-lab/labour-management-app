@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -29,6 +29,7 @@ export default function SitesScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [siteName, setSiteName] = useState("");
   const [selectedColor, setSelectedColor] = useState(SITE_COLORS[1]);
+  const [search, setSearch] = useState("");
 
   const handleAddSite = () => {
     if (!siteName.trim()) {
@@ -55,6 +56,12 @@ export default function SitesScreen() {
       },
     ]);
   };
+
+  const filteredSites = useMemo(() => {
+    if (!search.trim()) return sites;
+    const q = search.toLowerCase();
+    return sites.filter((s) => s.name.toLowerCase().includes(q));
+  }, [sites, search]);
 
   const styles = makeStyles(colors, insets);
 
@@ -122,8 +129,26 @@ export default function SitesScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Search Bar */}
+      <View style={styles.searchRow}>
+        <Ionicons name="search" size={17} color={colors.mutedForeground} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search sites..."
+          placeholderTextColor={colors.mutedForeground}
+          value={search}
+          onChangeText={setSearch}
+          returnKeyType="search"
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch("")}>
+            <Ionicons name="close-circle" size={17} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        )}
+      </View>
+
       <FlatList
-        data={sites}
+        data={filteredSites}
         keyExtractor={(item) => item.id}
         renderItem={renderSite}
         contentContainerStyle={styles.list}
@@ -213,6 +238,14 @@ const makeStyles = (colors: ReturnType<typeof import("@/hooks/useColors").useCol
     },
     title: { fontSize: 24, fontWeight: "800", color: colors.foreground, fontFamily: "Inter_700Bold" },
     addBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+    searchRow: {
+      flexDirection: "row", alignItems: "center", gap: 10,
+      marginHorizontal: 16, marginBottom: 10,
+      backgroundColor: colors.card, borderRadius: colors.radius,
+      borderWidth: 1.5, borderColor: colors.border,
+      paddingHorizontal: 14, paddingVertical: 10,
+    },
+    searchInput: { flex: 1, fontSize: 15, color: colors.foreground, fontFamily: "Inter_400Regular" },
     list: { paddingHorizontal: 16, paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 90) },
     siteCard: {
       backgroundColor: colors.card, borderRadius: colors.radius,

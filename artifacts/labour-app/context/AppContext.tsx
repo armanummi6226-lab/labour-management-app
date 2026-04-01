@@ -37,7 +37,25 @@ export interface PaymentRecord {
   date: string;
   amount: number;
   note?: string;
-  type?: "payment" | "settlement" | "carry_forward";
+}
+
+export interface HajriRecord {
+  id: string;
+  date: string;
+  totalAfter: number;
+  delta: number;
+  note?: string;
+}
+
+export interface SettlementRecord {
+  id: string;
+  date: string;
+  case: "case1" | "case2";
+  earnedAtSettle: number;
+  advanceAtSettle: number;
+  balancePaid: number;
+  carryForward: number;
+  note?: string;
 }
 
 export type LabourStatus = "active" | "left";
@@ -54,8 +72,10 @@ export interface Labour {
   notes?: string;
   totalHajri: number;
   hajriNote?: string;
+  hajriHistory: HajriRecord[];
   advances: AdvanceRecord[];
   payments: PaymentRecord[];
+  settlements: SettlementRecord[];
 }
 
 export interface AuthUser {
@@ -94,7 +114,7 @@ interface AppContextValue {
   deleteSiteExpense: (siteId: string, expenseId: string) => void;
 
   // Labour CRUD
-  addLabour: (data: Omit<Labour, "id" | "createdAt" | "advances" | "payments">) => void;
+  addLabour: (data: Omit<Labour, "id" | "createdAt" | "advances" | "payments" | "settlements" | "hajriHistory">) => void;
   updateLabour: (id: string, data: Partial<Labour>) => void;
   deleteLabour: (id: string) => void;
   getLabour: (id: string) => Labour | undefined;
@@ -166,7 +186,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         if (laboursRaw) {
           const raw: any[] = JSON.parse(laboursRaw);
-          // Migrate: add siteId, remove attendance array, ensure totalHajri
           const needsDefaultSite = raw.some((l) => !l.siteId);
           if (needsDefaultSite && !parsedSites.find((s) => s.id === DEFAULT_SITE_ID)) {
             parsedSites = [
@@ -185,8 +204,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             siteId: l.siteId ?? DEFAULT_SITE_ID,
             totalHajri: l.totalHajri ?? (l.attendance ? l.attendance.filter((a: any) => a.present).length : 0),
             advances: l.advances ?? [],
-            payments: l.payments ?? [],
-            noteHistory: undefined, // clean up old field
+            // Migrate old settlement payments out of payments[] into settlements[]
+            payments: (l.payments ?? []).filter((p: any) => p.type !== "settlement" && p.type !== "carry_forward"),
+            hajriHistory: l.hajriHistory ?? [],
+            settlements: l.settlements ?? (l.payments ?? [])
+              .filter((p: any) => p.type === "settlement")
+              .map((p: any) => ({
+                id: p.id,
+                date: p.date,
+                case: "case1" as const,
+                earnedAtSettle: p.amount ?? 0,
+                advanceAtSettle: 0,
+                balancePaid: p.amount ?? 0,
+                carryForward: 0,
+                note: p.note,
+              })),
           }));
         }
 
@@ -294,13 +326,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // ── Labour CRUD ───────────────────────────────────────────────────────────────
 
   const addLabour = useCallback(
-    (data: Omit<Labour, "id" | "createdAt" | "advances" | "payments">) => {
+    (data: Omit<Labour, "id" | "createdAt" | "advances" | "payments" | "settlements" | "hajriHistory">) => {
       const newLabour: Labour = {
         ...data,
         id: generateId(),
         createdAt: new Date().toISOString(),
         advances: [],
         payments: [],
+        settlements: [],
+        hajriHistory: [],
       };
       saveLabourers([...labourers, newLabour]);
     },
@@ -336,11 +370,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const setHajri = useCallback(
     (labourId: string, total: number, note?: string) => {
       saveLabourers(
-        labourers.map((l) =>
-          l.id === labourId
-            ? { ...l, totalHajri: Math.max(0, total), hajriNote: note ?? l.hajriNote }
-            : l
-        )
+        labourers.map((l) => {
+          if (l.id !== labourId) return l;
+          const newTotal = Math.max(0, total);
+          const delta = newTotal - l.totalHajri;
+          const record: HajriRecord = {
+            id: generateId(),
+            date: new Date().toISOString(),
+            totalAfter: newTotal,
+            delta,
+            note: note || undefined,
+          };
+          return {
+            ...l,
+            totalHajri: newTotal,
+            hajriNote: note ?? l.hajriNote,
+            hajriHistory: [...(l.hajriHistory ?? []), record],
+          };
+        })
       );
     },
     [labourers, saveLabourers]
@@ -380,6 +427,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   // ── Smart Settlement & Auto-Reset ─────────────────────────────────────────────
+  // After settlement, balance always = 0 for Case 1; = -carry for Case 2.
+  // We do NOT write to payments[] — those are for manual payments only.
+  // Settlement events go into settlements[] for history only.
 
   const settleAndReset = useCallback(
     (labourId: string, note?: string): "case1" | "case2" => {
@@ -391,41 +441,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const date = new Date().toISOString();
 
       let updatedAdvances: AdvanceRecord[];
-      let newPayment: PaymentRecord;
       let settlementCase: "case1" | "case2";
+      let balancePaid = 0;
+      let carryForward = 0;
 
       if (totalEarned >= totalAdvance) {
-        // Case 1: Clearance — pay balance to worker, reset everything
+        // Case 1: Full clearance — contractor pays balance to worker
         settlementCase = "case1";
-        const balance = totalEarned - totalAdvance;
-        newPayment = {
-          id: generateId(),
-          date,
-          amount: balance,
-          note: note || "Settlement — Full Clearance",
-          type: "settlement",
-        };
+        balancePaid = totalEarned - totalAdvance;
         updatedAdvances = [];
       } else {
-        // Case 2: Carry Forward — advance exceeds earned, roll over
+        // Case 2: Advance > Earned — carry forward the difference
         settlementCase = "case2";
-        const carry = totalAdvance - totalEarned;
-        newPayment = {
-          id: generateId(),
-          date,
-          amount: 0,
-          note: note || `Settlement — Carry Forward ₹${carry}`,
-          type: "settlement",
-        };
+        carryForward = totalAdvance - totalEarned;
         updatedAdvances = [
           {
             id: generateId(),
             date,
-            amount: carry,
+            amount: carryForward,
             note: "Carry Forward from previous settlement",
           },
         ];
       }
+
+      const settlementRecord: SettlementRecord = {
+        id: generateId(),
+        date,
+        case: settlementCase,
+        earnedAtSettle: totalEarned,
+        advanceAtSettle: totalAdvance,
+        balancePaid,
+        carryForward,
+        note,
+      };
 
       saveLabourers(
         labourers.map((l) =>
@@ -434,8 +482,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 ...l,
                 totalHajri: 0,
                 hajriNote: undefined,
+                // Keep hajriHistory for full ledger view
                 advances: updatedAdvances,
-                payments: [...l.payments, newPayment],
+                // Reset payments for fresh cycle — balance becomes 0
+                payments: [],
+                settlements: [...(l.settlements ?? []), settlementRecord],
               }
             : l
         )
@@ -452,7 +503,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const daysWorked = labour.totalHajri ?? 0;
     const totalEarned = daysWorked * labour.ratePerDay;
     const totalAdvance = labour.advances.reduce((s, a) => s + a.amount, 0);
-    const totalPaid = labour.payments.reduce((s, p) => s + p.amount, 0);
+    const totalPaid = (labour.payments ?? []).reduce((s, p) => s + p.amount, 0);
+    // remainingBalance: positive = contractor owes worker; negative = worker owes contractor
     const remainingBalance = totalEarned - totalAdvance - totalPaid;
     const isAdvancePending = totalAdvance > totalEarned - totalPaid;
     const isLeftWithAdvance = labour.status === "left" && totalAdvance > totalPaid;

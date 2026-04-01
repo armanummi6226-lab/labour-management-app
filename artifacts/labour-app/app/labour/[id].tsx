@@ -396,74 +396,119 @@ export default function LabourDetailScreen() {
         )}
 
         {/* ── LEDGER ───────────────────────────────────────────────────────── */}
-        {tab === "ledger" && (
-          <View>
-            {/* Hajri Summary Row */}
-            <View style={[styles.ledgerRow, { backgroundColor: colors.success + "12", borderRadius: colors.radius }]}>
-              <View style={[styles.ledgerIcon, { backgroundColor: colors.success + "25" }]}>
-                <Ionicons name="calendar" size={20} color={colors.success} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.ledgerDate}>{t("daysWorked")}</Text>
-                <Text style={styles.ledgerType}>{labour.totalHajri} days × ₹{labour.ratePerDay}/day</Text>
-              </View>
-              <Text style={[styles.ledgerAmt, { color: colors.success }]}>+{fmt(stats.totalEarned)}</Text>
-            </View>
+        {tab === "ledger" && (() => {
+          // Build unified timeline: hajriHistory + advances + settlements, sorted newest first
+          type LedgerEntry =
+            | { kind: "hajri"; id: string; date: string; totalAfter: number; delta: number; note?: string }
+            | { kind: "advance"; id: string; date: string; amount: number; note?: string; isCarry?: boolean }
+            | { kind: "settlement"; id: string; date: string; case: "case1" | "case2"; balancePaid: number; carryForward: number; earnedAtSettle: number; advanceAtSettle: number; note?: string };
 
-            {/* Advances */}
-            {[...labour.advances].sort((a, b) => b.date.localeCompare(a.date)).map((a) => (
-              <View key={a.id} style={styles.ledgerRow}>
-                <View style={[styles.ledgerIcon, { backgroundColor: colors.warning + "20" }]}>
-                  <MaterialCommunityIcons name="currency-inr" size={20} color={colors.warning} />
-                </View>
+          const entries: LedgerEntry[] = [
+            ...(labour.hajriHistory ?? []).map((h) => ({ kind: "hajri" as const, ...h })),
+            ...(labour.advances ?? []).map((a) => ({ kind: "advance" as const, ...a, isCarry: a.note?.toLowerCase().includes("carry") })),
+            ...(labour.settlements ?? []).map((s) => ({ kind: "settlement" as const, ...s })),
+          ].sort((a, b) => b.date.localeCompare(a.date));
+
+          const hasEntries = entries.length > 0 || labour.totalHajri > 0;
+
+          return (
+            <View>
+              {/* Current Balance Summary */}
+              <View style={[styles.balanceSummaryCard, {
+                backgroundColor: stats.remainingBalance >= 0 ? colors.success + "12" : stats.remainingBalance === 0 ? colors.muted : colors.destructive + "12",
+                borderColor: stats.remainingBalance >= 0 ? colors.success + "40" : stats.remainingBalance === 0 ? colors.border : colors.destructive + "40",
+              }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.ledgerDate}>{fmtDate(a.date)}</Text>
-                  <Text style={styles.ledgerType}>{t("advanceTaken")}</Text>
-                  {a.note ? <Text style={styles.ledgerNote}>{a.note}</Text> : null}
+                  <Text style={[styles.balanceSummaryLabel, { color: colors.mutedForeground }]}>{t("remainingBalance")}</Text>
+                  <Text style={[styles.balanceSummaryValue, { color: stats.remainingBalance >= 0 ? colors.success : stats.remainingBalance === 0 ? colors.mutedForeground : colors.destructive }]}>
+                    {stats.remainingBalance >= 0 ? "+" : ""}{fmt(stats.remainingBalance)}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+                    {stats.totalEarned > 0 || stats.totalAdvance > 0
+                      ? `Earned ${fmt(stats.totalEarned)} − Advance ${fmt(stats.totalAdvance)}`
+                      : "Start fresh after settlement"}
+                  </Text>
                 </View>
-                <Text style={[styles.ledgerAmt, { color: colors.warning }]}>-{fmt(a.amount)}</Text>
+                <Ionicons name="wallet-outline" size={28} color={stats.remainingBalance >= 0 ? colors.success : stats.remainingBalance === 0 ? colors.mutedForeground : colors.destructive} />
               </View>
-            ))}
 
-            {/* Payments */}
-            {[...labour.payments].sort((a, b) => b.date.localeCompare(a.date)).map((p) => (
-              <View key={p.id} style={[styles.ledgerRow, p.type === "settlement" && { backgroundColor: colors.success + "08", borderRadius: colors.radius }]}>
-                <View style={[styles.ledgerIcon, { backgroundColor: (p.type === "settlement" ? colors.success : colors.info) + "20" }]}>
-                  <Ionicons name={p.type === "settlement" ? "checkmark-done" : "cash"} size={20} color={p.type === "settlement" ? colors.success : colors.info} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.ledgerDate}>{fmtDate(p.date)}</Text>
-                  <Text style={styles.ledgerType}>{p.type === "settlement" ? t("settlement") : t("paymentMade")}</Text>
-                  {p.note ? <Text style={styles.ledgerNote}>{p.note}</Text> : null}
-                </View>
-                <Text style={[styles.ledgerAmt, { color: p.type === "settlement" ? colors.success : colors.info }]}>
-                  +{fmt(p.amount)}
-                </Text>
-              </View>
-            ))}
+              {/* Timeline */}
+              {entries.length === 0 && (
+                <Text style={styles.emptyMsg}>No history yet. Add Hajri or Advance to get started.</Text>
+              )}
 
-            {/* Balance Summary */}
-            <View style={[styles.ledgerRow, {
-              backgroundColor: stats.remainingBalance >= 0 ? colors.success + "12" : colors.destructive + "12",
-              borderRadius: colors.radius, marginTop: 8,
-            }]}>
-              <View style={[styles.ledgerIcon, { backgroundColor: (stats.remainingBalance >= 0 ? colors.success : colors.destructive) + "30" }]}>
-                <Ionicons name="wallet" size={20} color={stats.remainingBalance >= 0 ? colors.success : colors.destructive} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.ledgerDate, { fontWeight: "700" }]}>{t("remainingBalance")}</Text>
-                <Text style={styles.ledgerType}>Earned − Advance − Paid</Text>
-              </View>
-              <Text style={[styles.ledgerAmt, { color: stats.remainingBalance >= 0 ? colors.success : colors.destructive, fontSize: 15 }]}>
-                {fmt(Math.abs(stats.remainingBalance))}
-              </Text>
+              {entries.map((entry, idx) => {
+                if (entry.kind === "hajri") {
+                  return (
+                    <View key={entry.id} style={styles.ledgerRow}>
+                      <View style={[styles.ledgerIcon, { backgroundColor: colors.success + "20" }]}>
+                        <Ionicons name="calendar" size={18} color={colors.success} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.ledgerType}>Hajri Updated</Text>
+                        <Text style={styles.ledgerDate}>{fmtDate(entry.date)}</Text>
+                        <Text style={styles.ledgerSubInfo}>
+                          {entry.delta >= 0 ? `+${entry.delta}` : entry.delta} days → Total: {entry.totalAfter} days
+                        </Text>
+                        {entry.note ? <Text style={styles.ledgerNote}>📝 {entry.note}</Text> : null}
+                      </View>
+                      <Text style={[styles.ledgerAmt, { color: colors.success }]}>
+                        {entry.totalAfter} d
+                      </Text>
+                    </View>
+                  );
+                }
+
+                if (entry.kind === "advance") {
+                  return (
+                    <View key={entry.id} style={[styles.ledgerRow, entry.isCarry && { backgroundColor: colors.warning + "08", borderRadius: 8 }]}>
+                      <View style={[styles.ledgerIcon, { backgroundColor: colors.warning + "20" }]}>
+                        <MaterialCommunityIcons name="currency-inr" size={18} color={colors.warning} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.ledgerType}>{entry.isCarry ? t("carryForward") : t("advanceTaken")}</Text>
+                        <Text style={styles.ledgerDate}>{fmtDate(entry.date)}</Text>
+                        {entry.note && !entry.isCarry ? <Text style={styles.ledgerNote}>📝 {entry.note}</Text> : null}
+                      </View>
+                      <Text style={[styles.ledgerAmt, { color: colors.warning }]}>−{fmt(entry.amount)}</Text>
+                    </View>
+                  );
+                }
+
+                if (entry.kind === "settlement") {
+                  return (
+                    <View key={entry.id} style={[styles.ledgerRow, { backgroundColor: entry.case === "case1" ? colors.success + "10" : colors.warning + "10", borderRadius: 8 }]}>
+                      <View style={[styles.ledgerIcon, { backgroundColor: (entry.case === "case1" ? colors.success : colors.warning) + "25" }]}>
+                        <Ionicons name="checkmark-done-circle" size={18} color={entry.case === "case1" ? colors.success : colors.warning} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.ledgerType, { color: entry.case === "case1" ? colors.success : colors.warning }]}>
+                          {t("settlement")} — {entry.case === "case1" ? t("settlePaymentCase1") : t("settlePaymentCase2")}
+                        </Text>
+                        <Text style={styles.ledgerDate}>{fmtDate(entry.date)}</Text>
+                        <Text style={styles.ledgerSubInfo}>
+                          Earned: {fmt(entry.earnedAtSettle)} | Advance: {fmt(entry.advanceAtSettle)}
+                        </Text>
+                        {entry.case === "case1" && entry.balancePaid > 0 && (
+                          <Text style={[styles.ledgerSubInfo, { color: colors.success }]}>Paid to worker: {fmt(entry.balancePaid)}</Text>
+                        )}
+                        {entry.case === "case2" && (
+                          <Text style={[styles.ledgerSubInfo, { color: colors.warning }]}>Carry forward: {fmt(entry.carryForward)}</Text>
+                        )}
+                        {entry.note ? <Text style={styles.ledgerNote}>📝 {entry.note}</Text> : null}
+                      </View>
+                      <Text style={[styles.ledgerAmt, { color: entry.case === "case1" ? colors.success : colors.warning, fontSize: 10, textAlign: "right" }]}>
+                        RESET
+                      </Text>
+                    </View>
+                  );
+                }
+
+                return null;
+              })}
             </View>
-
-            {labour.advances.length === 0 && labour.payments.length === 0 && labour.totalHajri === 0 && (
-              <Text style={styles.emptyMsg}>{t("noLabourers")}</Text>
-            )}
-          </View>
-        )}
+          );
+        })()}
       </ScrollView>
 
       {/* ── Advance Modal ─────────────────────────────────────────────────── */}
@@ -671,6 +716,13 @@ const makeStyles = (colors: ReturnType<typeof import("@/hooks/useColors").useCol
     ledgerNote: { fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontStyle: "italic" },
     ledgerAmt: { fontSize: 14, fontWeight: "700", fontFamily: "Inter_700Bold" },
     emptyMsg: { fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center", paddingVertical: 32 },
+    ledgerSubInfo: { fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 1 },
+    balanceSummaryCard: {
+      flexDirection: "row", alignItems: "center",
+      borderWidth: 1.5, borderRadius: colors.radius, padding: 14, marginBottom: 14,
+    },
+    balanceSummaryLabel: { fontSize: 12, fontFamily: "Inter_500Medium", marginBottom: 2 },
+    balanceSummaryValue: { fontSize: 26, fontWeight: "800", fontFamily: "Inter_700Bold" },
 
     // Modals
     modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
