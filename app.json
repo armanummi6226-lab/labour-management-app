@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "Labour App",
+    "slug": "labour-app",
+    "version": "1.0.0",
+    "android": {
+      "package": "com.ummihani.labourapp"
+    }
+  }
+}
