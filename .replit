@@ -81,3 +81,6 @@ timeoutMs = 20000
 
 [[ports]]
 localPort = 22628
+
+[nix]
+packages = ["flutter"]
