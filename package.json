@@ -12,3 +12,14 @@
     "react-native": "0.73.0"
   }
 }
+"android": {
+  "package": "com.labour.app"
+}{
+  "expo": {
+    "name": "Labour App",
+    "slug": "labour-app",
+    "android": {
+      "package": "com.labour.app"
+    }
+  }
+}
